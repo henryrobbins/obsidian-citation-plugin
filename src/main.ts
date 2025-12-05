@@ -1,7 +1,7 @@
 import {
   EditorPosition,
+  Editor,
   FileSystemAdapter,
-  MarkdownSourceView,
   MarkdownView,
   normalizePath,
   Plugin,
@@ -9,13 +9,11 @@ import {
 } from 'obsidian';
 import * as path from 'path';
 import * as chokidar from 'chokidar';
-import * as CodeMirror from 'codemirror';
 
 import {
   compile as compileTemplate,
   TemplateDelegate as Template,
 } from 'handlebars';
-
 
 import CitationEvents from './events';
 import {
@@ -64,12 +62,11 @@ export default class CitationPlugin extends Plugin {
     'Unable to access literature note. Please check that the literature note folder exists, or update the Citations plugin settings.',
   );
 
-  get editor(): CodeMirror.Editor {
+  get editor(): Editor {
     const view = this.app.workspace.activeLeaf.view;
     if (!(view instanceof MarkdownView)) return null;
 
-    const sourceView = view.sourceMode;
-    return (sourceView as MarkdownSourceView).cmEditor;
+    return view.editor;
   }
 
   async loadSettings(): Promise<void> {
@@ -250,11 +247,11 @@ export default class CitationPlugin extends Plugin {
 
           return this.library;
         })
-        .catch((e) => {
+        .catch((e): Library | null => {
           if (e instanceof WorkerManagerBlocked) {
             // Silently catch WorkerManager error, which will be thrown if the
             // library is already being loaded
-            return;
+            return null;
           }
 
           console.error(e);
@@ -394,14 +391,13 @@ export default class CitationPlugin extends Plugin {
         }
 
         const currentPosition = this.editor.getCursor();
-        this.editor.replaceRange(linkText, currentPosition);
-
-        const newPosition: EditorPosition = {
+        const endPosition: EditorPosition = {
           line: currentPosition.line,
           ch: currentPosition.ch + linkText.length,
         };
 
-        this.editor.setCursor(newPosition);
+        this.editor.replaceRange(linkText, currentPosition, currentPosition);
+        this.editor.setCursor(endPosition);
       })
       .catch(console.error);
   }
@@ -425,13 +421,12 @@ export default class CitationPlugin extends Plugin {
     const citation = func.bind(this)(citekey);
 
     const currentPosition = this.editor.getCursor();
-    this.editor.replaceRange(citation, currentPosition);
-
-    const newPosition: EditorPosition = {
+    const endPosition: EditorPosition = {
       line: currentPosition.line,
       ch: currentPosition.ch + citation.length,
     };
 
-    this.editor.setCursor(newPosition);
+    this.editor.replaceRange(citation, currentPosition, currentPosition);
+    this.editor.setCursor(endPosition);
   }
 }
